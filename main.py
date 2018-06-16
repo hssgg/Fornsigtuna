@@ -25,37 +25,36 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import os
 import marshal
 import re
 
-from flask import send_file, request, render_template
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, render_template
 
-with open("zh-Hant.marshal", 'rb') as cf:
-    hantRep, Pattern_str = marshal.load(cf)
-    hantPattern = re.compile(Pattern_str)
-    del Pattern_str
-with open("zh-Hans.marshal", 'rb') as cf:
-    hansRep, Pattern_str = marshal.load(cf)
-    hansPattern = re.compile(Pattern_str)
-    del Pattern_str
-with open("zh-cn.marshal", 'rb') as cf:
-    cnRep, Pattern_str = marshal.load(cf)
-    cnPattern = re.compile(Pattern_str)
-    del Pattern_str
-with open("zh-hk.marshal", 'rb') as cf:
-    hkRep, Pattern_str = marshal.load(cf)
-    hkPattern = re.compile(Pattern_str)
-    del Pattern_str
-with open("zh-tw.marshal", 'rb') as cf:
-    twRep, Pattern_str = marshal.load(cf)
-    twPattern = re.compile(Pattern_str)
-    del Pattern_str
+
+class Translator(object):
+    def __init__(self, rep, pattern):
+        self.rep = rep
+        self.pattern = pattern
+
+    def translation(self, text):
+        return self.pattern.sub(lambda m: self.rep[re.escape(m.group(0))], text)
+
+
+def read_dict(file_name):
+    with open(file_name, 'rb') as cf:
+        rep, pattern_str = marshal.load(cf)
+        pattern = re.compile(pattern_str)
+    return Translator(rep, pattern)
+
+
+dict_hans_to_hant = read_dict("dict/hans-to-hant.marshal")
+dict_hant_to_hans = read_dict("dict/hant-to-hans.marshal")
+dict_hant_to_hk = read_dict("dict/hant-to-hk.marshal")
+dict_hant_to_tw = read_dict("dict/hant-to-tw.marshal")
+dict_hk_to_hant = read_dict("dict/hk-to-hant.marshal")
+dict_tw_to_hant = read_dict("dict/tw-to-hant.marshal")
 
 app = Flask(__name__)
-if 'SERVER_SOFTWARE' in os.environ and os.environ['SERVER_SOFTWARE'].startswith('Dev'):
-    app.config['DEBUG'] = True
 
 
 @app.errorhandler(404)
@@ -77,41 +76,36 @@ def api():
     lang = lang.decode("utf-8").lower()
     if not (lang in (u"zh-hans", u"zh-cn", u"zh-tw", u"zh-hk", u"zh-hant")):
         response = make_response(jsonify(error="parameter 'lang' is error\n"))
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'POST'
-        response.headers['Access-Control-Allow-Headers'] = 'x-requested-with,content-type'
         return response
-
-    # print(bool(html))
-    # print(type(text))
 
     if isinstance(text, str):
         text = text.decode("utf-8")
     if not isinstance(text, unicode):
         response = make_response(jsonify(error="text is not utf-8 encode\n"))
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'POST'
-        response.headers['Access-Control-Allow-Headers'] = 'x-requested-with,content-type'
         return response
-
+    src_text = text
     if lang == u"zh-hans":
-        result = hansPattern.sub(lambda m: hansRep[re.escape(m.group(0))], text)
+        text = dict_hant_to_hans.translation(text)
     elif lang == u"zh-hant":
-        result = hantPattern.sub(lambda m: hantRep[re.escape(m.group(0))], text)
+        text = dict_hans_to_hant.translation(text)
     elif lang == u"zh-cn":
-        result = cnPattern.sub(lambda m: cnRep[re.escape(m.group(0))], text)
+        text = dict_hk_to_hant.translation(text)
+        text = dict_tw_to_hant.translation(text)
+        text = dict_hant_to_hans.translation(text)
     elif lang == u"zh-hk":
-        result = hkPattern.sub(lambda m: hkRep[re.escape(m.group(0))], text)
+        text = dict_hans_to_hant.translation(text)
+        text = dict_hant_to_hk.translation(text)
     elif lang == u"zh-tw":
-        result = twPattern.sub(lambda m: twRep[re.escape(m.group(0))], text)
+        text = dict_hans_to_hant.translation(text)
+        text = dict_hant_to_tw.translation(text)
     else:
-        result = text
+        text = text
 
     if not bool(html):
-        response = make_response(jsonify(result=result, lang=lang, text=text, html=bool(html)))
+        response = make_response(jsonify(result=text, lang=lang, text=src_text, html=bool(html)))
         response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Allow-Methods'] = 'POST'
         response.headers['Access-Control-Allow-Headers'] = 'x-requested-with,content-type'
         return response
     else:
-        return render_template("result.html", result=result)
+        return render_template("result.html", result=text)
