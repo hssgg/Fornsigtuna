@@ -36,3 +36,6 @@ Fornsigtuna使用了OpenCC的簡繁轉化表，可以轉換出更加本地化的
 demo地址：[https://zh-conv.liantian.me/](https://zh-conv.liantian.me/ "https://zh-conv.liantian.me/")
 
 Blog : https://liantian.me/post/fornsigtuna-working-on-gae-s-chinese-simplified-and-traditional-conversion-api/
+
+
+![Powered by Google App Engine](https://cloud.google.com/appengine/images/appengine-noborder-120x30.gif)
